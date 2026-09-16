@@ -1,0 +1,118 @@
+services:
+  data_base:
+    image: postgres:16
+    container_name: data_base
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: userpassword
+      POSTGRES_DB: transactions_db
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d transactions_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+    networks:
+      - fraud_detection_network
+
+  broker:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: broker
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT_HOST://localhost:9092,PLAINTEXT://broker:19092'
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@broker:29093'
+      KAFKA_LISTENERS: 'CONTROLLER://:29093,PLAINTEXT_HOST://:9092,PLAINTEXT://:19092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+    networks:
+      - fraud_detection_network
+    volumes:
+      - ./kafka-data:/tmp/kraft-combined-logs
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: broker:19092
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9101
+    depends_on:
+      - broker
+    networks:
+      - fraud_detection_network
+
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fraud_consumer
+    command: ["python", "consumer.py"]
+    restart: unless-stopped
+    environment:
+      IS_DOCKER: "true"
+      DB_HOST: data_base
+      DB_PORT: 5432
+      DB_NAME: transactions_db
+      DB_USER: user
+      DB_PASSWORD: userpassword
+      KAFKA_BOOTSTRAP_SERVER: broker:19092
+      KAFKA_TOPIC: transactions
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3:latest}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      USE_AGENT: ${USE_AGENT:-True}
+    volumes:
+      - .:/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - data_base
+      - broker
+    networks:
+      - fraud_detection_network
+
+  producer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fraud_producer
+    command: ["python", "producer.py"]
+    restart: unless-stopped
+    environment:
+      IS_DOCKER: "true"
+      KAFKA_BOOTSTRAP_SERVER: broker:19092
+      KAFKA_TOPIC: transactions
+      N_CUSTOMERS: 1000
+      N_TRANSACTIONS: 100000
+    volumes:
+      - .:/app
+    depends_on:
+      - broker
+    networks:
+      - fraud_detection_network
+
+networks:
+  fraud_detection_network:

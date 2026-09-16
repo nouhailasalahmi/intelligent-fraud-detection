@@ -1,0 +1,14 @@
+﻿.venv/
+__pycache__/
+*/__pycache__/
+.git/
+.gitignore
+data/
+kafka-data/
+dataset/
+*.pyc
+*.pyo
+*.pyd
+.env
+.ipynb_checkpoints
+notebook.ipynb

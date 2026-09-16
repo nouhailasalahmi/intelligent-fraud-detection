@@ -1,0 +1,12 @@
+# environement virtuel
+.venv/
+
+# cache python
+__pycache__/
+
+# Données kafka
+kafka-data/
+
+# Données locales
+data/
+
