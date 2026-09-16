@@ -4,7 +4,7 @@ from faker import Faker
 
 from config import *
 
-from transactions import generate_transaction
+from entities.transactions import generate_transaction
 
 faker = Faker()
 

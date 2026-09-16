@@ -2,7 +2,7 @@ import time
 from kafka import KafkaConsumer
 import json
 from config import TOPIC, BOOTSTRAP_SERVER, KAFKA_AUTO_OFFSET_RESET, USE_AGENT
-from fraud_detector import predict_fraud
+from ML.fraud_detector import predict_fraud
 from db import save_transaction, get_customer_history, update_llm_decision, create_tables
 from LLM.analyzer import FraudAnalyzer
 from LLM.agent import FraudAgent

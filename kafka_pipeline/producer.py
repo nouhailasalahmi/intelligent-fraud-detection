@@ -6,7 +6,7 @@ from time import sleep
 from kafka import KafkaProducer
 
 from config import *
-from transactions import generate_transaction
+from entities.transactions import generate_transaction
 from customers import generate_customers
 
 

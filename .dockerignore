@@ -10,5 +10,5 @@ dataset/
 *.pyo
 *.pyd
 .env
-.ipynb_checkpoints
-notebook.ipynb
+
+

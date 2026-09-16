@@ -10,3 +10,8 @@ kafka-data/
 # Données locales
 data/
 
+# Dataset
+dataset/*.png  
+
+
+.env

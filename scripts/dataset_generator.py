@@ -2,7 +2,7 @@ import random
 import pandas as pd
 import numpy as np
 from customers import generate_customers
-from transactions import generate_transaction
+from entities.transactions import generate_transaction
 from config import *
 
 def dataset_generator(n_customers, n_transactions, is_fraud_ratio):
