@@ -1,8 +1,11 @@
 import os
-import requests 
-from .base import LLM_Provider
+import requests
+from .base import LLMProvider
 
-class OllamaProvider(LLM_Provider):
+
+class OllamaProvider(LLMProvider):
+    """Fournisseur pour modèles open-source locaux exécutés via Ollama (Llama3, Mistral, etc.)."""
+    
     def __init__(self, model="llama3", base_url="http://localhost:11434/api/chat"):
         self.model = model
         url = base_url if base_url else "http://localhost:11434/api/chat"
@@ -12,7 +15,7 @@ class OllamaProvider(LLM_Provider):
             
         self.base_url = url if url.endswith("/api/chat") else url.rstrip("/") + "/api/chat"
 
-    def generate(self, system_prompt: str, user_prompt: str) -> str: 
+    def generate(self, system_prompt: str, user_prompt: str) -> str:
         response = requests.post(
             self.base_url,
             json={
@@ -23,11 +26,12 @@ class OllamaProvider(LLM_Provider):
                 ],
                 "stream": False,
                 "format": "json",
-            }
+            },
+            timeout=60
         )
         response.raise_for_status()
-        raw_text = response.json()["message"]["content"]  
+        raw_text = response.json()["message"]["content"]
         return raw_text
 
-# Alias rétrocompatible
+
 ollama_provider = OllamaProvider

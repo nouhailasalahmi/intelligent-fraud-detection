@@ -3,11 +3,15 @@ import json
 import numpy as np
 from time import sleep
 
+
 from kafka import KafkaProducer
 
 from config import *
 from entities.transactions import generate_transaction
-from customers import generate_customers
+try:
+    from entities.customers import generate_customers
+except ImportError:
+    from entities.customers import generate_customers
 
 
 producer = None

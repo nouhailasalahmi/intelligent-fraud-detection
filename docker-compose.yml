@@ -66,10 +66,11 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: fraud_consumer
-    command: ["python", "consumer.py"]
+    command: ["python", "kafka_pipeline/consumer.py"]
     restart: unless-stopped
     environment:
       IS_DOCKER: "true"
+      PYTHONPATH: "/app"
       DB_HOST: data_base
       DB_PORT: 5432
       DB_NAME: transactions_db
@@ -77,6 +78,7 @@ services:
       DB_PASSWORD: userpassword
       KAFKA_BOOTSTRAP_SERVER: broker:19092
       KAFKA_TOPIC: transactions
+      KAFKA_ACTIONS_TOPIC: fraud-actions
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3:latest}
@@ -84,10 +86,37 @@ services:
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       USE_AGENT: ${USE_AGENT:-True}
+      MULTI_AGENT_MODE: ${MULTI_AGENT_MODE:-True}
     volumes:
       - .:/app
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      - data_base
+      - broker
+    networks:
+      - fraud_detection_network
+
+  action_consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fraud_action_consumer
+    command: ["python", "kafka_pipeline/action_consumer.py"]
+    restart: unless-stopped
+    environment:
+      IS_DOCKER: "true"
+      PYTHONPATH: "/app"
+      DB_HOST: data_base
+      DB_PORT: 5432
+      DB_NAME: transactions_db
+      DB_USER: user
+      DB_PASSWORD: userpassword
+      KAFKA_BOOTSTRAP_SERVER: broker:19092
+      KAFKA_ACTIONS_TOPIC: fraud-actions
+    volumes:
+      - .:/app
+      - ./reports:/app/reports
     depends_on:
       - data_base
       - broker
@@ -99,10 +128,11 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: fraud_producer
-    command: ["python", "producer.py"]
+    command: ["python", "kafka_pipeline/producer.py"]
     restart: unless-stopped
     environment:
       IS_DOCKER: "true"
+      PYTHONPATH: "/app"
       KAFKA_BOOTSTRAP_SERVER: broker:19092
       KAFKA_TOPIC: transactions
       N_CUSTOMERS: 1000

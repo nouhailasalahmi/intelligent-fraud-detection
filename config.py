@@ -1,8 +1,11 @@
 import os
-from dotenv import load_dotenv
 
-# Charger les variables d'environnement depuis un fichier .env si présent
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    # Charger les variables d'environnement depuis un fichier .env si présent
+    load_dotenv()
+except ImportError:
+    pass
 
 # ============================================
 # Paramètres de génération des données
@@ -83,3 +86,21 @@ if (os.path.exists("/.dockerenv") or os.getenv("IS_DOCKER") == "true") and ("loc
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:latest")
 
 USE_AGENT = os.getenv("USE_AGENT", "True").lower() in ("true", "1", "yes")
+MULTI_AGENT_MODE = os.getenv("MULTI_AGENT_MODE", "True").lower() in ("true", "1", "yes")
+
+
+# ============================================
+# Configuration Réponses Automatisées & Conformité
+# ============================================
+
+ACTIONS_TOPIC = os.getenv("KAFKA_ACTIONS_TOPIC", os.getenv("ACTIONS_TOPIC", "fraud-actions"))
+
+# Seuils de confiance pour déclenchement des actions
+CONFIDENCE_BLOCK_THRESHOLD = float(os.getenv("CONFIDENCE_BLOCK_THRESHOLD", 0.85))
+CONFIDENCE_REVIEW_THRESHOLD = float(os.getenv("CONFIDENCE_REVIEW_THRESHOLD", 0.60))
+
+# Conformité DSP2 (Montant d'exemption SCA en EUR/MAD)
+DSP2_EXEMPTION_THRESHOLD_AMOUNT = float(os.getenv("DSP2_EXEMPTION_THRESHOLD_AMOUNT", 30.0))
+
+# Dossier des rapports SAR (Suspicious Activity Report)
+REPORTS_DIR = os.getenv("REPORTS_DIR", "reports")

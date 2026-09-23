@@ -144,7 +144,9 @@ def generate_transaction(customer, is_fraud):
 
         # label
 
-        "is_fraud" : int(is_fraud)
+        "is_fraud" : int(is_fraud),
 
+        # DSP2 Strong Customer Authentication (SCA / 2FA) simulation
+        "is_2fa_verified": int(np.random.choice([False, True], p=[0.90, 0.10]) if is_fraud else np.random.choice([False, True], p=[0.05, 0.95]))
     }
     return transaction

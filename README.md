@@ -1,212 +1,160 @@
-# Fraud Detection — Détection Intelligente de Fraude par Agents IA Autonomes
+# 🛡️ Système Autonome Multi-Agents de Détection et Réponse aux Fraudes Bancaires
 
-Système de détection de fraude bancaire en temps réel combinant un pipeline de **Machine Learning** (Isolation Forest + XGBoost) avec un **agent LLM autonome** chargé de vérifier et justifier les alertes de fraude, sans intervention humaine directe.
-
-Projet réalisé dans le cadre d'un stage technique chez **Eurafric Information (EAI)**.
+Ce projet implémente une plateforme bancaire de surveillance en temps réel, combinant des modèles de Machine Learning (supervisé et non supervisé), une architecture multi-agents LLM (ReAct et collaboration d'experts), ainsi qu'un moteur de remédiation automatisée et de conformité réglementaire (DSP2, RGPD, rapports SAR Tracfin/ACPR).
 
 ---
 
-## 📋 Table des matières
-
-- [Architecture](#-architecture)
-- [Stack technique](#-stack-technique)
-- [Structure du projet](#-structure-du-projet)
-- [Installation](#-installation)
-- [Configuration](#-configuration)
-- [Utilisation](#-utilisation)
-- [Détails du pipeline ML](#-détails-du-pipeline-ml)
-- [Module LLM & Agent](#-module-llm--agent)
-- [Base de données](#-base-de-données)
-
----
-
-## 🏗 Architecture
-
-Le système repose sur un pipeline en trois étapes :
+## 🏛️ Architecture Globale du Système
 
 ```
-Transaction (Kafka Producer)
-        │
-        ▼
-┌─────────────────────┐
-│   Kafka Consumer     │
-└──────────┬───────────┘
-           │
-           ▼
-┌─────────────────────┐      ┌──────────────────────┐
-│  Modèle ML hybride    │────▶│  Sauvegarde en base    │
-│  (Isolation Forest    │      │  (PostgreSQL)          │
-│   + XGBoost)           │      └──────────────────────┘
-└──────────┬───────────┘
-           │ score de fraude
-           ▼
-┌─────────────────────┐
-│  Agent LLM (FraudAgent) │
-│  ou Analyzer simple    │
-└──────────┬───────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  Décision + justification│
-│  enregistrées en base   │
-└─────────────────────┘
-```
-
-**Principe clé** : le modèle ML priorise la réduction des **faux négatifs** (fraudes manquées), quitte à générer plus de fausses alertes. Ces alertes sont ensuite vérifiées automatiquement par l'agent LLM, qui analyse l'historique du client et rend une décision justifiée — sans étape d'escalade humaine.
-
----
-
-## 🛠 Stack technique
-
-| Composant | Technologie |
-|---|---|
-| Streaming | Apache Kafka |
-| Base de données | PostgreSQL |
-| ML — détection d'anomalies | Isolation Forest (scikit-learn) |
-| ML — classification | XGBoost |
-| LLM | Architecture multi-providers (Ollama, OpenAI, Anthropic, Mistral) |
-| Agent | Boucle ReAct simplifiée, appels d'outils en JSON structuré |
-| Conteneurisation | Docker / Docker Compose |
-| Langage | Python |
-
----
-
-## 📁 Structure du projet
-
-```
-fraud_detection/
-├── kafka_pipeline/
-│   ├── producer.py          # Simule/envoie les transactions vers Kafka
-│   └── consumer.py          # Orchestre le pipeline complet (ML → DB → LLM)
-├── entities/
-│   ├── customers.py         # Modèle client
-│   └── transactions.py      # Modèle transaction
-├── scripts/
-│   └── dataset_generator.py # Génération du dataset synthétique
-├── ml/
-│   ├── fraud_detector.py    # Chargement et inférence du modèle hybride
-│   ├── notebook.ipynb       # Entraînement, évaluation, sauvegarde du modèle
-│   └── models/              # Modèles entraînés (.pkl)
-├── LLM/
-│   ├── base.py               # Interface abstraite LLMProvider
-│   ├── ollama_provider.py
-│   ├── openai_provider.py
-│   ├── anthropic_provider.py
-│   ├── mistral_provider.py
-│   ├── factory.py            # Sélection dynamique du provider
-│   ├── analyzer.py           # FraudAnalyzer (analyse simple par prompt)
-│   ├── agent.py               # FraudAgent (agent avec boucle d'outils)
-│   └── tools.py               # Outils exposés à l'agent (basés sur db.py)
-├── dataset/
-│   ├── transactions.csv      # Dataset de référence (entraînement + simulation Kafka)
-│   ├── amount_distribution.png
-│   └── fraud_vs_normal_comparison.png
-├── db.py                     # Connexion et opérations PostgreSQL
-├── config.py                  # Configuration centralisée du projet
-├── docker-compose.yml
-├── Dockerfile
-├── requirements.txt
-└── .gitignore
++---------------------------------------------------------------------------------------------------+
+|                                      PIPELINE ÉVÉNEMENTIEL KAFKA                                  |
+|                                                                                                   |
+|  [Producer] ---> Topic 'transactions' ---> [Consumer (Triage & Multi-Agents)]                      |
+|                                                     |                                             |
+|                                                     v                                             |
+|                                            [ML Scoring (XGB+IF)]                                  |
+|                                                     |                                             |
+|                                                     v                                             |
+|                                            [DSP2 Check (SCA/2FA)]                                 |
+|                                                     |                                             |
+|                                                     v                                             |
+|                             +-----------------------------------------------+                     |
+|                             |          SYSTÈME MULTI-AGENTS LLM             |                     |
+|                             |                                               |                     |
+|                             |   [InvestigatorAgent] <--> [tools.py / DB]    |                     |
+|                             |             | (Facts JSON)                    |                     |
+|                             |             v                                 |                     |
+|                             |      [DecisionAgent]                          |                     |
+|                             |             ^                                 |                     |
+|                             |             | (Coordination / Pass 2)         |                     |
+|                             |      [MultiAgentOrchestrator]                 |                     |
+|                             +-----------------------------------------------+                     |
+|                                                     |                                             |
+|                                                     v                                             |
+|                                      [determine_action(matrice)]                                  |
+|                                                     |                                             |
+|                                                     +---> Topic 'fraud-actions'                   |
+|                                                                  |                                |
+|                                                                  v                                |
+|                                                      [Action Consumer Engine]                     |
+|                                                       - BLOCK_CARD                                |
+|                                                       - NOTIFY_CUSTOMER                           |
+|                                                       - FLAG_FOR_REVIEW                           |
+|                                                       - SAR Report (RGPD/Tracfin)                 |
+|                                                       - Logs 'action_log' & 'audit_trail'         |
++---------------------------------------------------------------------------------------------------+
 ```
 
 ---
 
-## ⚙️ Installation
+## 🧩 Les 3 Axes Majeurs Réalisés
 
-### Prérequis
+### 1. 🤖 Système Multi-Agents Spécialisés (`LLM/agents/`)
+- **`InvestigatorAgent`** :
+  - Enquête factuelle autonome sans parti pris décisionnel.
+  - Interroge dynamiquement les outils (`LLM/tools.py`) pour extraire l'historique étendu et le profilage de risque du client.
+  - Produit un rapport factuel structuré (`anomalies_detected`, `risk_factors`, `mitigating_factors`, `factual_context`).
+- **`DecisionAgent`** :
+  - Juge impartial sans accès direct à la base de données.
+  - Évalue les signaux ML (XGBoost + Isolation Forest) croisés avec le rapport de l'Investigateur et le statut DSP2.
+  - Rend un verdict motivé avec score de confiance (`0.0` à `1.0`), justification textuelle et recommandation d'action.
+- **`MultiAgentOrchestrator`** :
+  - Supervise les échanges, gère une 2ᵉ passe d'enquête ciblée en cas d'incertitude (`confidence < 0.60`), et enregistre chaque étape dans la piste d'audit.
 
-- Python 3.10+
-- Docker & Docker Compose
-- (Optionnel) [Ollama](https://ollama.com) installé localement si vous utilisez le provider LLM local
+### 2. ⚡ Réponses Automatisées en Temps Réel (`kafka_pipeline/`, `compliance/actions.py`)
+- **Topic Kafka dédié** : `fraud-actions`
+- **Matrice Décision -> Action** :
+  - `fraude` (confiance $\ge 0.85$) $\rightarrow$ **`BLOCK_CARD`** (Blocage immédiat carte + alerte Core Banking + SAR).
+  - `fraude` ($0.60 \le \text{confiance} < 0.85$) $\rightarrow$ **`NOTIFY_CUSTOMER`** (Notification SMS/Push instantanée pour confirmation).
+  - `incertain` ou confiance $< 0.60$ $\rightarrow$ **`FLAG_FOR_REVIEW`** (Escalade prioritaire Desk Analyste Fraude L2).
+  - `legitime` $\rightarrow$ **`ALLOW`** (Autorisation sans restriction).
+- **Consommateur d'actions (`action_consumer.py`)** :
+  - Exécute les actions de remédiation en direct et historise chaque opération dans la table `action_log`.
 
-### Étapes
+### 3. 📜 Conformité Réglementaire Bancaire, Traçabilité & RGPD (`compliance/`, `db.py`)
+- **Rapports SAR (Suspicious Activity Report / ACPR / Tracfin)** :
+  - Génération automatique de rapports officiels structurés (JSON + Markdown dans `reports/`) pour toute fraude confirmée.
+- **Vérification DSP2 / SCA** :
+  - Contrôle automatique de l'Authentification Forte du Client (2FA) selon les règles et exemptions de la Directive sur les Services de Paiement.
+- **Pseudonymisation RGPD** :
+  - Hash cryptographique irréversible des identifiants clients (`CUST_HASH_...`) et masquage standardisé PCI-DSS des cartes (`**** **** **** 1234`).
+- **Piste d'Audit Centralisée (`audit_trail`)** :
+  - Traçabilité complète horodatée de l'ingestion à l'exécution de l'action (`ML_SCORING`, `INVESTIGATION`, `DECISION`, `ACTION_DISPATCHED`, `ACTION_EXECUTED`, `SAR_GENERATED`).
 
+---
+
+## 🚀 Démarrage et Exécution
+
+### 1. Prérequis & Installation
 ```bash
-# 1. Cloner le repo
-git clone <url-du-repo>
-cd fraud_detection
-
-# 2. Créer un environnement virtuel
-python -m venv .venv
-source .venv/bin/activate      # Linux/Mac
-.venv\Scripts\activate         # Windows
-
-# 3. Installer les dépendances
+# Installation des dépendances
 pip install -r requirements.txt
-
-# 4. Configurer les paramètres du projet (base de données, Kafka, provider LLM)
-
-# 5. Lancer les services (PostgreSQL + Kafka)
-docker-compose up -d
 ```
 
----
-
-## 🔧 Configuration
-
-Le projet centralise sa configuration (connexion à la base de données, paramètres Kafka, choix du provider LLM, paramètres de génération du dataset) dans `config.py`. Le provider LLM est interchangeable : Ollama (local), OpenAI, Anthropic ou Mistral, sans modification du reste du code.
-
----
-
-## ▶️ Utilisation
-
-### Générer le dataset
-
+### 2. Lancement des Tests Unitaires & d'Intégration
 ```bash
-python scripts/dataset_generator.py
+python -m unittest discover tests
 ```
 
-### Entraîner le modèle
-
-Ouvrir et exécuter `ml/notebook.ipynb`, qui :
-1. Charge et explore le dataset
-2. Entraîne Isolation Forest et XGBoost (hybride)
-3. Optimise le seuil de décision (priorité au rappel)
-4. Sauvegarde les artefacts dans `ml/models/`
-
-### Lancer le pipeline complet
-
+### 3. Démarrage complet via Docker Compose
 ```bash
-# Démarrer le consumer (écoute Kafka, applique ML + LLM, sauvegarde en DB)
-python kafka_pipeline/consumer.py
-
-# Dans un autre terminal : envoyer des transactions
-python kafka_pipeline/producer.py
+docker-compose up --build
 ```
+Les conteneurs lancés :
+- `data_base` : PostgreSQL (transactions, logs d'actions, audit trail, statuts cartes)
+- `broker` : Apache Kafka en mode KRaft
+- `kafka-ui` : Interface web Kafka sur `http://localhost:8080`
+- `consumer` : Détection ML + Inférence Multi-Agents + Dispatch d'actions
+- `action_consumer` : Exécution des actions automatisées et génération des SAR
+- `producer` : Simulateur de flux de transactions bancaires temps réel
 
 ---
 
-## 🤖 Détails du pipeline ML
+## 📁 Structure du Répertoire
 
-- **Isolation Forest** : détection d'anomalies non supervisée, sert de signal générique.
-- **Approche hybride** : le score de l'Isolation Forest est intégré comme feature dans XGBoost.
-- **XGBoost** : classification supervisée, entraîné avec `scale_pos_weight` pour compenser le déséquilibre des classes.
-- **Seuil optimisé** : ajusté (au lieu du seuil par défaut à 0.5) pour maximiser le rappel — objectif : minimiser les fraudes manquées, quitte à générer plus de fausses alertes, puisqu'elles sont filtrées ensuite par l'agent LLM.
-
-**Variables du dataset** : `customer_id`, `transaction_id`, `card_id`, `amount`, `city`, `country`, `timestamp`, `payment_method`, `device_type`, `amount_ratio`, `device_changed`, `payment_method_changed`, `city_changed`, `country_changed`, `out_hours`, `amount_abnormal`, `is_fraud`, `usual_device`, `usual_city`, `usual_country`, `usual_payment_method`.
-
----
-
-## 🧠 Module LLM & Agent
-
-Le module `LLM/` est conçu pour être **indépendant du fournisseur LLM** — le client final peut choisir son provider sans changer le reste du code.
-
-- **`FraudAnalyzer`** : construit un prompt à partir du résultat ML et de l'historique client, puis parse la décision retournée par le LLM (décision, confiance, justification).
-- **`FraudAgent`** : évolution de l'analyzer vers un agent utilisant une boucle d'appel d'outils (ReAct simplifié, JSON structuré, sans function calling natif), capable d'interroger dynamiquement la base de données via `tools.py`.
-
-Les deux coexistent dans le code (switch `USE_AGENT` dans `config.py`) pour permettre une comparaison des performances.
-
-Chaque transaction analysée par le LLM enrichit la table `transactions` avec : `llm_decision`, `llm_confidence`, `llm_justification`.
-
----
-
-## 🗄 Base de données
-
-PostgreSQL stocke :
-- L'historique complet des transactions (avec features ML et décision LLM)
-- L'historique client, utilisé par le LLM/agent pour contextualiser son analyse
-
-Le volume Docker de PostgreSQL (`data/`) est généré automatiquement et **ne doit pas être versionné**.
-
----
-
+```
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── config.py                     # Configuration centralisée & seuils
+├── db.py                         # Gestion PostgreSQL (transactions, audit_trail, action_log)
+│
+├── compliance/                   # Module de conformité bancaire & réglementaire
+│   ├── __init__.py
+│   ├── actions.py                # Matrice décision -> action de remédiation
+│   ├── dsp2.py                   # Vérification SCA / Exemptions DSP2
+│   ├── rgpd.py                   # Pseudonymisation & masquage PCI-DSS
+│   └── sar_generator.py          # Générateur officiel de rapports SAR / Tracfin
+│
+├── LLM/                          # Moteur d'intelligence agentique
+│   ├── __init__.py
+│   ├── factory.py                # Factory LLM (Ollama, Mistral, OpenAI, Anthropic)
+│   ├── tools.py                  # Outils d'investigation de données
+│   ├── agent.py                  # Agent ReAct legacy
+│   ├── analyzer.py               # Analyseur LLM classique
+│   └── agents/                   # Architecture Multi-Agents
+│       ├── __init__.py
+│       ├── investigator_agent.py # Agent Enquêteur (collecte des faits)
+│       ├── decision_agent.py     # Agent Décideur (arbitrage & verdict)
+│       └── orchestrator.py       # Orchestrateur & supervision
+│
+├── ML/                           # Modèles de détection de fraude
+│   ├── fraud_detector.py         # Pipeline de prédiction XGBoost + Isolation Forest
+│   └── models/                   # Pkl artefacts des modèles entraînés
+│
+├── kafka_pipeline/               # Pipeline de streaming temps réel
+│   ├── producer.py               # Générateur de flux de transactions
+│   ├── consumer.py               # Ingestion, ML, DSP2 & Multi-Agents
+│   └── action_consumer.py        # Exécuteur des actions automatisées & SAR
+│
+├── entities/                     # Modélisation des données bancaires
+│   ├── customers.py
+│   └── transactions.py
+│
+├── reports/                      # Dossier de sortie des rapports SAR générés
+└── tests/                        # Suite complète de tests unitaires et E2E
+    ├── test_compliance.py
+    ├── test_multi_agent.py
+    └── test_end_to_end.py
+```
