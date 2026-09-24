@@ -20,7 +20,7 @@
 - [Configuration](#-configuration)
 - [Structure du projet](#-structure-du-projet)
 - [Conformité et sécurité](#-conformité-et-sécurité)
-- [Équipe](#-équipe)
+
 
 ---
 
