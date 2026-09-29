@@ -15,6 +15,12 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface CreatedUserResponse {
+  user: User;
+  generated_username: string;
+  generated_password: string;
+}
+
 export type ActionType = 'BLOCK_CARD' | 'NOTIFY_CUSTOMER' | 'FLAG_FOR_REVIEW' | 'ALLOW';
 export type DecisionType = 'fraude' | 'legitime' | 'incertain';
 export type ReviewStatus = 'PENDING' | 'RESOLVED' | 'BLOCKED' | 'ALLOWED' | 'FALSE_POSITIVE';

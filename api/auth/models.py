@@ -21,3 +21,13 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+class CreateAnalystRequest(BaseModel):
+    full_name: str = Field(..., min_length=2, max_length=255)
+    email: EmailStr
+
+
+class CreatedUserResponse(BaseModel):
+    user: UserResponse
+    generated_username: str
+    generated_password: str

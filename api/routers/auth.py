@@ -1,7 +1,16 @@
+import re
+import secrets
+import string
 from fastapi import APIRouter, HTTPException, status, Depends
-from api.auth.models import LoginRequest, TokenResponse, UserResponse
-from api.auth.security import verify_password, create_access_token
-from api.auth.dependencies import get_current_user
+from api.auth.models import (
+    LoginRequest,
+    TokenResponse,
+    UserResponse,
+    CreateAnalystRequest,
+    CreatedUserResponse,
+)
+from api.auth.security import verify_password, create_access_token, get_password_hash
+from api.auth.dependencies import get_current_user, require_roles
 from api.database import get_db_cursor
 
 router = APIRouter(prefix="/auth", tags=["Authentification"])
@@ -84,3 +93,80 @@ async def get_current_user_profile(user: UserResponse = Depends(get_current_user
     Récupère le profil de l'utilisateur actuellement authentifié.
     """
     return user
+
+
+def _slugify_username(full_name: str) -> str:
+    """Transforme un nom complet en identifiant simple, ex: 'Fatima Zahra' -> 'fatima.zahra'."""
+    slug = re.sub(r"[^a-zA-Z\s]", "", full_name).strip().lower()
+    parts = slug.split()
+    return ".".join(parts) if parts else "analyste"
+
+
+def _generate_random_password(length: int = 12) -> str:
+    """Génère un mot de passe aléatoire sécurisé (lettres, chiffres, symboles)."""
+    alphabet = string.ascii_letters + string.digits + "!@#$%"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+@router.post("/users", response_model=CreatedUserResponse, status_code=status.HTTP_201_CREATED)
+async def create_analyst(
+    new_analyst: CreateAnalystRequest,
+    current_user: UserResponse = Depends(require_roles(["admin"])),
+):
+    """
+    Crée un nouveau compte Data Analyste. Réservé aux administrateurs.
+    Le nom d'utilisateur et le mot de passe sont générés automatiquement et
+    retournés en clair UNE SEULE FOIS dans cette réponse (jamais stocké en clair,
+    ni récupérable après coup).
+    """
+    with get_db_cursor(commit=True) as cur:
+        cur.execute("SELECT id FROM users WHERE email = %s;", (new_analyst.email,))
+        if cur.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Un compte existe déjà avec cet email.",
+            )
+
+        base_username = _slugify_username(new_analyst.full_name)
+        username = base_username
+        suffix = 1
+        while True:
+            cur.execute("SELECT id FROM users WHERE username = %s;", (username,))
+            if not cur.fetchone():
+                break
+            suffix += 1
+            username = f"{base_username}{suffix}"
+
+        generated_password = _generate_random_password()
+        password_hash = get_password_hash(generated_password)
+
+        cur.execute("""
+            INSERT INTO users (username, email, password_hash, full_name, role)
+            VALUES (%s, %s, %s, %s, 'analyst')
+            RETURNING id, username, email, full_name, role, created_at;
+        """, (username, new_analyst.email, password_hash, new_analyst.full_name))
+        row = cur.fetchone()
+
+    return CreatedUserResponse(
+        user=UserResponse(**row),
+        generated_username=username,
+        generated_password=generated_password,
+    )
+
+
+@router.get("/users", response_model=list[UserResponse])
+async def list_users(
+    current_user: UserResponse = Depends(require_roles(["admin"])),
+):
+    """
+    Liste tous les utilisateurs (analystes et admins). Réservé aux administrateurs.
+    """
+    with get_db_cursor() as cur:
+        cur.execute("""
+            SELECT id, username, email, full_name, role, created_at
+            FROM users
+            ORDER BY created_at DESC;
+        """)
+        rows = cur.fetchall()
+
+    return [UserResponse(**row) for row in rows]

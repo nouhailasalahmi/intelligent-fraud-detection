@@ -1,6 +1,7 @@
 import { 
   AuthResponse, 
   User, 
+  CreatedUserResponse,
   DashboardStats, 
   PaginatedResponse, 
   TransactionSummary, 
@@ -71,6 +72,15 @@ class ApiClient {
     logout: () => {
       localStorage.removeItem('fraud_token');
       localStorage.removeItem('fraud_user');
+    },
+    listUsers: async (): Promise<User[]> => {
+      return this.request<User[]>('/auth/users');
+    },
+    createAnalyst: async (fullName: string, email: string): Promise<CreatedUserResponse> => {
+      return this.request<CreatedUserResponse>('/auth/users', {
+        method: 'POST',
+        body: JSON.stringify({ full_name: fullName, email }),
+      });
     },
   };
 
