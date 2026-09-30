@@ -17,3 +17,4 @@ dataset/*.png
 .env
 reports/
 tests/
+.env

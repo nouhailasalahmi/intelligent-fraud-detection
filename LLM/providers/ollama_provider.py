@@ -27,7 +27,7 @@ class OllamaProvider(LLMProvider):
                 "stream": False,
                 "format": "json",
             },
-            timeout=60
+            timeout=120
         )
         response.raise_for_status()
         raw_text = response.json()["message"]["content"]

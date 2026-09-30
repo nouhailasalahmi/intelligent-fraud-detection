@@ -6,7 +6,7 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_USER: user
-      POSTGRES_PASSWORD: userpassword
+      POSTGRES_PASSWORD: password
       POSTGRES_DB: transactions_db
     volumes:
       - ./data:/var/lib/postgresql/data
@@ -141,6 +141,56 @@ services:
       - .:/app
     depends_on:
       - broker
+    networks:
+      - fraud_detection_network
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: fraud_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      IS_DOCKER: "true"
+      PYTHONPATH: "/app"
+      DB_HOST: data_base
+      DB_PORT: 5432
+      DB_NAME: transactions_db
+      DB_USER: user
+      DB_PASSWORD: userpassword
+      KAFKA_BOOTSTRAP_SERVER: broker:19092
+      KAFKA_ACTIONS_TOPIC: fraud-actions
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-super-secret-fraud-detection-jwt-key-32chars}
+      REPORTS_DIR: /app/reports
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3:latest}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - .:/app
+      - ./reports:/app/reports
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - data_base
+      - broker
+    networks:
+      - fraud_detection_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fraud_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
     networks:
       - fraud_detection_network
 
