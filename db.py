@@ -113,22 +113,25 @@ def create_tables():
 
 
 def save_transaction(transaction_dict, resultat_ml, dsp2_info=None):
-    """Sauvegarde une transaction, son résultat ML et ses informations de conformité DSP2."""
+    """Sauvegarde une transaction, son résultat ML et ses informations de conformité DSP2.
+    Idempotent : si transaction_uuid existe déjà, retourne l'id existant sans dupliquer."""
     conn = get_connection()
     cur = conn.cursor()
-    
+
     dsp2_compliant = dsp2_info.get("is_compliant", True) if dsp2_info else True
     dsp2_reason = dsp2_info.get("reason", "") if dsp2_info else ""
-    
+    tx_uuid = str(transaction_dict.get("transaction_id", ""))
+
     cur.execute("""
         INSERT INTO transactions
         (transaction_uuid, customer_id, card_id, amount, city, country, payment_method, device_type,
          transaction_timestamp, fraud_probability, iso_anomaly_score, is_fraud_alert,
          dsp2_compliant, dsp2_reason)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (transaction_uuid) DO UPDATE SET transaction_uuid = EXCLUDED.transaction_uuid
         RETURNING id;
     """, (
-        str(transaction_dict.get("transaction_id", "")),
+        tx_uuid,
         str(transaction_dict.get("customer_id")),
         str(transaction_dict.get("card_id", "")),
         transaction_dict.get("amount"),
@@ -283,4 +286,4 @@ def mark_sar_generated(transaction_id, sar_filepath):
     """, (sar_filepath, transaction_id))
     conn.commit()
     cur.close()
-    conn.close()
+    conn.close()

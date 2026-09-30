@@ -166,7 +166,7 @@ export const Alerts: React.FC = () => {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
                   <span className="text-base font-bold text-white">
-                    {Number(alert.amount).toFixed(2)} €
+                    {Number(alert.amount).toFixed(2)} DH
                   </span>
                   <span className="text-xs font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
                     Client : {alert.customer_id}
@@ -264,7 +264,7 @@ export const Alerts: React.FC = () => {
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1 text-xs">
               <div className="flex justify-between text-slate-300">
                 <span>Montant :</span>
-                <span className="font-bold text-white">{Number(selectedAlert.amount).toFixed(2)} €</span>
+                <span className="font-bold text-white">{Number(selectedAlert.amount).toFixed(2)} DH</span>
               </div>
               <div className="flex justify-between text-slate-300">
                 <span>Client (RGPD) :</span>

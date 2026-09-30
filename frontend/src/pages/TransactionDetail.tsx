@@ -123,7 +123,7 @@ export const TransactionDetail: React.FC = () => {
         <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur-sm">
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Montant du Paiement</span>
           <div className="mt-2 text-3xl font-extrabold text-white">
-            {Number(tx.amount).toFixed(2)} €
+            {Number(tx.amount).toFixed(2)} DH
           </div>
           <div className="mt-4 pt-4 border-t border-slate-800/80 space-y-2 text-xs">
             <div className="flex justify-between">

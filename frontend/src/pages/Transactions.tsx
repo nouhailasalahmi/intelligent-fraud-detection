@@ -146,7 +146,7 @@ export const Transactions: React.FC = () => {
               type="number"
               value={minAmount}
               onChange={(e) => setMinAmount(e.target.value)}
-              placeholder="Min €"
+              placeholder="Min DH"
               className="w-24 px-3 py-2 rounded-xl border border-slate-700 bg-slate-950/70 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
             />
             <span className="text-slate-500">-</span>
@@ -154,7 +154,7 @@ export const Transactions: React.FC = () => {
               type="number"
               value={maxAmount}
               onChange={(e) => setMaxAmount(e.target.value)}
-              placeholder="Max €"
+              placeholder="Max DH"
               className="w-24 px-3 py-2 rounded-xl border border-slate-700 bg-slate-950/70 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
             />
           </div>
@@ -245,7 +245,7 @@ export const Transactions: React.FC = () => {
                         {tx.card_id}
                       </td>
                       <td className="py-3 px-4 font-semibold text-white">
-                        {Number(tx.amount).toFixed(2)} €
+                        {Number(tx.amount).toFixed(2)} DH
                       </td>
                       <td className="py-3 px-4 text-slate-300">
                         {tx.city || 'N/A'}, {tx.country || 'N/A'}
