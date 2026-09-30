@@ -5,10 +5,16 @@ Service Consommateur d'Actions Automatisées (action_consumer.py) :
 et journalise l'ensemble dans PostgreSQL pour conformité et traçabilité.
 """
 
+import os
+import sys
 import time
 import json
 import uuid
 from datetime import datetime, timezone
+
+# Assurer l'accès à la racine du projet quel que soit le dossier d'exécution
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from kafka import KafkaConsumer
 
 from config import ACTIONS_TOPIC, BOOTSTRAP_SERVER, KAFKA_AUTO_OFFSET_RESET

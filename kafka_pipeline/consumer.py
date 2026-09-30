@@ -1,5 +1,11 @@
+import os
+import sys
 import time
 import json
+
+# Assurer l'accès à la racine du projet quel que soit le dossier d'exécution
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from kafka import KafkaConsumer, KafkaProducer
 
 from config import (

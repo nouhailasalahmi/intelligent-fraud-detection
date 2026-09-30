@@ -1,8 +1,13 @@
+import os
+import sys
 import random
 import json
+from datetime import datetime
 import numpy as np
 from time import sleep
 
+# Assurer l'accès à la racine du projet quel que soit le dossier d'exécution
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from kafka import KafkaProducer
 
@@ -37,7 +42,9 @@ try:
     for _ in range(n_transactions):
         customer = random.choice(customers)
         is_fraud = np.random.choice([True, False], p=[0.05, 0.95])
-        transaction = generate_transaction(customer, is_fraud)
+        # Horodatage temps réel exact au moment de l'émission
+        now_ts = datetime.now().isoformat()
+        transaction = generate_transaction(customer, is_fraud, timestamp=now_ts)
 
         producer.send(TOPIC, value=transaction)
         print(f"Sent transaction: id={transaction['transaction_id']}, customer={transaction['customer_id']}, amount={transaction['amount']:.2f}, is_fraud={transaction['is_fraud']}")

@@ -61,6 +61,22 @@ def create_tables():
     for col_name, col_type in alter_columns:
         cur.execute(f"ALTER TABLE transactions ADD COLUMN IF NOT EXISTS {col_name} {col_type};")
 
+    # Contrainte d'unicité sur transaction_uuid pour empêcher l'insertion de doublons
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'uq_transactions_uuid'
+            ) THEN
+                -- S'il y a d'anciens doublons de transaction_uuid, garder uniquement le premier
+                DELETE FROM transactions a USING transactions b
+                WHERE a.id > b.id AND a.transaction_uuid IS NOT NULL AND a.transaction_uuid != '' AND a.transaction_uuid = b.transaction_uuid;
+
+                ALTER TABLE transactions ADD CONSTRAINT uq_transactions_uuid UNIQUE (transaction_uuid);
+            END IF;
+        END $$;
+    """)
+
     # 2. Table de journalisation des actions exécutées (fermeture de la boucle)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS action_log (
@@ -113,12 +129,13 @@ def create_tables():
 
 
 def save_transaction(transaction_dict, resultat_ml, dsp2_info=None):
-    """Sauvegarde une transaction, son résultat ML et ses informations de conformité DSP2."""
+    """Sauvegarde une transaction, son résultat ML et ses informations de conformité DSP2 (idempotente)."""
     conn = get_connection()
     cur = conn.cursor()
     
     dsp2_compliant = dsp2_info.get("is_compliant", True) if dsp2_info else True
     dsp2_reason = dsp2_info.get("reason", "") if dsp2_info else ""
+    tx_uuid = str(transaction_dict.get("transaction_id", ""))
     
     cur.execute("""
         INSERT INTO transactions
@@ -126,9 +143,10 @@ def save_transaction(transaction_dict, resultat_ml, dsp2_info=None):
          transaction_timestamp, fraud_probability, iso_anomaly_score, is_fraud_alert,
          dsp2_compliant, dsp2_reason)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (transaction_uuid) DO NOTHING
         RETURNING id;
     """, (
-        str(transaction_dict.get("transaction_id", "")),
+        tx_uuid,
         str(transaction_dict.get("customer_id")),
         str(transaction_dict.get("card_id", "")),
         transaction_dict.get("amount"),
@@ -143,7 +161,15 @@ def save_transaction(transaction_dict, resultat_ml, dsp2_info=None):
         dsp2_compliant,
         dsp2_reason,
     ))
-    transaction_id = cur.fetchone()[0]
+    row = cur.fetchone()
+    if row:
+        transaction_id = row[0]
+    else:
+        # Doublon détecté : récupérer l'identifiant de la transaction déjà enregistrée
+        cur.execute("SELECT id FROM transactions WHERE transaction_uuid = %s;", (tx_uuid,))
+        existing = cur.fetchone()
+        transaction_id = existing[0] if existing else None
+
     conn.commit()
     cur.close()
     conn.close()
@@ -283,4 +309,18 @@ def mark_sar_generated(transaction_id, sar_filepath):
     """, (sar_filepath, transaction_id))
     conn.commit()
     cur.close()
-    conn.close()
+    conn.close()
+
+
+def clear_all_tables():
+    """Vide toutes les tables pour repartir de zéro sans conflits de clés ni doublons."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        TRUNCATE TABLE transactions, action_log, audit_trail, card_status, customer_pseudonyms 
+        RESTART IDENTITY CASCADE;
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("Base de données réinitialisée : toutes les tables ont été vidées avec succès.")

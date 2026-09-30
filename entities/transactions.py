@@ -12,7 +12,7 @@ def pick_alternative_value(current_value, all_values):
     return random.choice(other_values) if other_values else current_value
 
 
-def generate_transaction(customer, is_fraud):
+def generate_transaction(customer, is_fraud, timestamp=None, card_id=None):
 
     # -------------------------
     # Generate changed_features
@@ -71,31 +71,37 @@ def generate_transaction(customer, is_fraud):
     # Timestamp
     # -------------------------
 
-    now = datetime.now()
+    if timestamp is None:
+        now = datetime.now()
 
-    active_hours = list(
-        range(
-            customer["active_start"],
-            customer["active_end"] + 1,
+        active_hours = list(
+            range(
+                customer["active_start"],
+                customer["active_end"] + 1,
+            )
         )
-    )
 
-    inactive_hours = [
-        h for h in range(24)
-        if h not in active_hours
-    ]
+        inactive_hours = [
+            h for h in range(24)
+            if h not in active_hours
+        ]
 
-    if time_changed:
-        hour = random.choice(inactive_hours)
-    else:
-        hour = random.choice(active_hours)
+        if time_changed:
+            hour = random.choice(inactive_hours)
+        else:
+            hour = random.choice(active_hours)
 
-    timestamp = now.replace(
-        hour=hour,
-        minute=random.randint(0, 59),
-        second=random.randint(0, 59),
-        microsecond=0,
-    ).isoformat()
+        timestamp = now.replace(
+            hour=hour,
+            minute=random.randint(0, 59),
+            second=random.randint(0, 59),
+            microsecond=0,
+        ).isoformat()
+
+    # -------------------------
+    # Card ID cohérent
+    # -------------------------
+    selected_card_id = card_id or customer.get("card_id") or faker.credit_card_number()
 
     # -------------------------
     # Transaction dictionary
@@ -107,7 +113,7 @@ def generate_transaction(customer, is_fraud):
 
         "transaction_id": faker.uuid4(),
 
-        "card_id": faker.credit_card_number(),
+        "card_id": selected_card_id,
 
         "amount": amount,
 
