@@ -12,7 +12,8 @@ import {
   Shield, 
   Wifi, 
   WifiOff,
-  User as UserIcon
+  User as UserIcon,
+  Users
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useAlerts } from '../../context/AlertsContext';
@@ -40,6 +41,7 @@ export const Sidebar: React.FC = () => {
     },
     { to: '/reports', label: 'Rapports & Audit', icon: FileText },
     { to: '/agent', label: 'Agent IA (Text-to-SQL)', icon: Bot, highlight: true },
+    ...(isAdmin ? [{ to: '/users', label: 'Gestion des Utilisateurs', icon: Users }] : []),
   ];
 
   return (

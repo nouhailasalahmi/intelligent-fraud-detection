@@ -1,10 +1,12 @@
 # 🛡️ Détection et Réponse Autonome aux Fraudes Bancaires par Agents IA
 
-> Plateforme de surveillance transactionnelle en temps réel combinant **Machine Learning**, **agents LLM collaboratifs** et **remédiation automatisée**, conforme aux exigences **DSP2**, **RGPD** et **Tracfin/ACPR**.
+> Plateforme de surveillance transactionnelle en temps réel combinant **Machine Learning**, **agents LLM collaboratifs**, **remédiation automatisée** et un **dashboard web temps réel**, conforme aux exigences **DSP2**, **RGPD** et **Tracfin/ACPR**.
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)
 ![Kafka](https://img.shields.io/badge/Apache_Kafka-KRaft-231F20?logo=apachekafka)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-database-4169E1?logo=postgresql&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-REST_+_WebSocket-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![XGBoost](https://img.shields.io/badge/ML-XGBoost_+_Isolation_Forest-orange)
 
@@ -21,19 +23,19 @@
 - [Structure du projet](#-structure-du-projet)
 - [Conformité et sécurité](#-conformité-et-sécurité)
 
-
 ---
 
 ## 🎯 Aperçu
 
-Chaque transaction bancaire traverse un pipeline en quatre temps :
+Chaque transaction bancaire traverse un pipeline en cinq temps :
 
 1. **Scoring ML** : XGBoost (supervisé) et Isolation Forest (non supervisé) évaluent le risque.
 2. **Contrôle DSP2** : vérification de l'authentification forte (SCA/2FA) et des exemptions.
 3. **Analyse multi-agents LLM** : un enquêteur collecte les faits, un décideur rend un verdict motivé.
 4. **Action automatique** : blocage, notification ou escalade, avec traçabilité complète.
+5. **Restitution temps réel** : l'API expose les alertes, transactions et rapports, consommés par un dashboard web via REST et WebSocket.
 
-Le système est **explicable** : chaque décision est accompagnée d'un score de confiance, d'une justification textuelle et d'une piste d'audit horodatée.
+Le système est **explicable** : chaque décision est accompagnée d'un score de confiance, d'une justification textuelle et d'une piste d'audit horodatée, visible directement depuis l'interface web.
 
 ---
 
@@ -67,6 +69,16 @@ flowchart TD
     AC --> A3[FLAG_FOR_REVIEW]
     AC --> A4[Rapport SAR]
     AC --> LOG[(action_log<br/>audit_trail)]
+
+    subgraph WEB [Interface web]
+        direction LR
+        API[FastAPI<br/>REST + WebSocket]
+        FE[Dashboard React]
+        API <-->|données temps réel| FE
+    end
+
+    LOG --> API
+    C -.->|écoute Kafka| API
 ```
 
 ---
@@ -94,7 +106,13 @@ Les actions sont publiées sur le topic Kafka dédié `fraud-actions`, puis exé
 | `incertain` | ou < 0.60 | `FLAG_FOR_REVIEW` | Escalade prioritaire vers le desk analystes fraude (L2) |
 | `legitime` | toute | `ALLOW` | Autorisation sans restriction |
 
-### 3. 📜 Conformité réglementaire, traçabilité et RGPD (`compliance/`, `db.py`)
+### 3. 🌐 API & dashboard temps réel (`api/`, `frontend/`)
+
+- **API REST + WebSocket** (FastAPI, `api/`) : authentification, gestion des transactions, alertes, rapports et statistiques du dashboard, avec écoute Kafka en arrière-plan pour pousser les mises à jour en direct.
+- **Dashboard web** (React + TypeScript, `frontend/`) : visualisation des alertes, du statut des transactions et des rapports SAR, mise à jour en temps réel via WebSocket.
+- Documentation interactive générée automatiquement (Swagger/OpenAPI).
+
+### 4. 📜 Conformité réglementaire, traçabilité et RGPD (`compliance/`, `db.py`)
 
 - **Rapports SAR (ACPR / Tracfin)** : génération automatique (JSON + Markdown) pour toute fraude confirmée.
 - **DSP2 / SCA** : contrôle de l'authentification forte selon les règles et exemptions de la directive.
@@ -111,6 +129,8 @@ Les actions sont publiées sur le topic Kafka dédié `fraud-actions`, puis exé
 | Agents LLM | Architecture ReAct, factory multi-fournisseurs : Ollama, Mistral, OpenAI, Anthropic |
 | Streaming | Apache Kafka (mode KRaft), Kafka UI |
 | Persistance | PostgreSQL |
+| API | FastAPI (REST + WebSocket), authentification JWT |
+| Interface web | React 19, TypeScript, Vite, Tailwind CSS, Recharts |
 | Déploiement | Docker, Docker Compose |
 | Langage | Python |
 
@@ -122,6 +142,7 @@ Les actions sont publiées sur le topic Kafka dédié `fraud-actions`, puis exé
 
 - Docker et Docker Compose
 - Python 3.10+ (pour un lancement hors Docker)
+- Node.js 18+ (pour lancer le frontend hors Docker)
 - Une clé API pour le fournisseur LLM choisi, ou un modèle local via Ollama
 
 ### 1. Cloner le dépôt
@@ -154,26 +175,34 @@ docker-compose up --build
 | `consumer` | Scoring ML, inférence multi-agents, dispatch des actions | logs du conteneur |
 | `action_consumer` | Exécution des actions et génération des SAR | logs du conteneur |
 | `producer` | Simulateur de transactions en temps réel | logs du conteneur |
+| `api` | API FastAPI (REST + WebSocket) | http://localhost:8000/api/v1/docs |
+| `frontend` | Dashboard web React | http://localhost:3000 |
 
 Suivre le flux en direct :
 
 ```bash
-docker-compose logs -f consumer action_consumer
+docker-compose logs -f consumer action_consumer api
 ```
 
 ### Installation locale (sans Docker)
 
 ```bash
+# Backend / pipeline
 python -m venv .venv
 source .venv/bin/activate        # Windows : .venv\Scripts\activate
 pip install -r requirements.txt
+
+# Frontend
+cd frontend
+npm install
+npm run dev
 ```
 
 ---
 
 ## ⚙️ Configuration
 
-Les paramètres sont centralisés dans `config.py` (seuils de décision, connexion base, Kafka) et les secrets dans un fichier `.env` **jamais versionné**.
+Les paramètres sont centralisés dans `config.py` / `api/config.py` (seuils de décision, connexion base, Kafka, CORS) et les secrets dans un fichier `.env` **jamais versionné**.
 
 Exemple de `.env.example` (adapter les noms aux variables réellement lues par `config.py`) :
 
@@ -186,9 +215,12 @@ LLM_API_KEY=your_key_here
 POSTGRES_USER=your_user
 POSTGRES_PASSWORD=your_password
 POSTGRES_DB=fraud_db
+
+# API
+JWT_SECRET_KEY=your_own_secret_key
 ```
 
-> ⚠️ Ne commitez jamais `.env` ni vos clés API. Vérifiez qu'il figure dans `.gitignore`.
+> ⚠️ Ne commitez jamais `.env` ni vos clés API. Vérifiez qu'il figure dans `.gitignore`. La valeur par défaut de `JWT_SECRET_KEY` dans `docker-compose.yml` est un exemple de démonstration : à remplacer avant tout déploiement réel.
 
 ---
 
@@ -226,9 +258,28 @@ POSTGRES_DB=fraud_db
 │   ├── consumer.py               # Ingestion, ML, DSP2, multi-agents
 │   └── action_consumer.py        # Exécution des actions et SAR
 │
-└── entities/                     # Modèles de données
-    ├── customers.py
-    └── transactions.py
+├── api/                           # API FastAPI
+│   ├── main.py                    # Point d'entrée, lifespan, écoute Kafka
+│   ├── config.py                  # Configuration API (préfixe, CORS)
+│   ├── database.py                # Accès base de données côté API
+│   ├── auth/                      # Authentification JWT
+│   ├── services/                  # Écoute Kafka, logique métier
+│   └── routers/                   # Endpoints : auth, transactions, alerts, reports, dashboard, agent, ws
+│
+├── frontend/                      # Dashboard web
+│   ├── src/                       # Composants React / TypeScript
+│   └── package.json               # Dépendances (React, Vite, Tailwind, Recharts)
+│
+├── entities/                      # Modèles de données
+│   ├── customers.py
+│   └── transactions.py
+│
+├── dataset/                       # Données d'exemple et visualisations
+│   └── transactions.csv
+│
+└── scripts/                       # Scripts utilitaires (génération de données, démo)
+    ├── dataset_generator.py
+    └── demo.py
 ```
 
 > Les dossiers `tests/` et `reports/` (rapports SAR générés à l'exécution) ne sont pas versionnés.
@@ -240,5 +291,5 @@ POSTGRES_DB=fraud_db
 - Pseudonymisation des identifiants clients avant tout traitement par les agents LLM.
 - Masquage des numéros de carte conforme PCI-DSS.
 - Agent décideur isolé de la base de données (principe du moindre privilège).
+- Authentification JWT sur l'API, CORS restreint aux origines autorisées.
 - Piste d'audit complète pour chaque décision automatisée, exploitable lors d'un contrôle.
-
