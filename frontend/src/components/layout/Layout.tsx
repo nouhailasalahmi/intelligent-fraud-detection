@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { ToastContainer } from '../ui/ToastContainer';
-import { Menu, X, Shield, Bell } from 'lucide-react';
+import { Menu, X, Bell } from 'lucide-react';
 import { useAlerts } from '../../context/AlertsContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -46,8 +46,8 @@ export const Layout: React.FC = () => {
           </button>
 
           <div className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-blue-500" />
-            <span className="font-bold text-sm tracking-tight text-white">FRAUD SHIELD</span>
+            <img src="/assets/logo.png" alt="Logo" className="w-5 h-5 object-contain" />
+            <span className="font-bold text-sm tracking-tight text-white">Fraud Guard</span>
           </div>
 
           <button

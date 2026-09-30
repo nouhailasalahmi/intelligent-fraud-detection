@@ -112,7 +112,7 @@ export const AlertsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               const newToast: ToastNotification = {
                 id: toastId,
                 title: '🚨 Nouvelle alerte fraude détectée',
-                message: `Transaction de ${Number(newAlert.amount).toFixed(2)} € (${newAlert.city || 'Inconnu'}) mise en attente d'arbitrage.`,
+                message: `Transaction de ${Number(newAlert.amount).toFixed(2)} DH (${newAlert.city || 'Inconnu'}) mise en attente d'arbitrage.`,
                 severity: newAlert.confidence && newAlert.confidence > 0.8 ? 'critical' : 'warning',
                 timestamp: new Date().toLocaleTimeString(),
                 alertData: newAlert,

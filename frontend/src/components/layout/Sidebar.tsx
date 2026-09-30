@@ -9,7 +9,6 @@ import {
   LogOut, 
   ChevronLeft, 
   ChevronRight, 
-  Shield, 
   Wifi, 
   WifiOff,
   User as UserIcon,
@@ -56,16 +55,16 @@ export const Sidebar: React.FC = () => {
           {!collapsed ? (
             <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="p-2 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400">
-                <Shield className="w-5 h-5" />
+                 <img src="/logo.png" alt="Fraud Guard" className="w-5 h-5 object-contain" />
               </div>
               <div>
-                <h1 className="text-sm font-bold tracking-tight text-white truncate">FRAUD SHIELD</h1>
+                <h1 className="text-sm font-bold tracking-tight text-white truncate">Fraud Guard</h1>
                 <p className="text-[10px] text-slate-400 font-mono">AUTONOMOUS BANK SOC</p>
               </div>
             </div>
           ) : (
             <div className="mx-auto p-2 rounded-xl bg-blue-600/20 text-blue-400">
-              <Shield className="w-5 h-5" />
+               <img src="/logo.png" alt="Fraud Guard" className="w-5 h-5 object-contain" />
             </div>
           )}
 

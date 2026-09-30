@@ -185,7 +185,7 @@ export const Reports: React.FC = () => {
                           {sar.generated_at ? new Date(sar.generated_at).toLocaleString() : 'N/A'}
                         </td>
                         <td className="py-3 px-4 font-semibold text-white">
-                          {sar.amount ? `${Number(sar.amount).toFixed(2)} €` : 'N/A'}
+                          {sar.amount ? `${Number(sar.amount).toFixed(2)} DH` : 'N/A'}
                         </td>
                         <td className="py-3 px-4">
                           <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono">

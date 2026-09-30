@@ -123,7 +123,7 @@ export const Dashboard: React.FC = () => {
               </div>
               <div className="mt-3 flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-white">{stats.total_transactions.toLocaleString()}</span>
-                <span className="text-xs text-slate-400 font-mono">({stats.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} €)</span>
+                <span className="text-xs text-slate-400 font-mono">({stats.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} DH)</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1">Traitées par le pipeline Kafka</p>
             </div>
@@ -345,7 +345,7 @@ export const Dashboard: React.FC = () => {
                       {tx.transaction_timestamp ? new Date(tx.transaction_timestamp).toLocaleTimeString() : 'N/A'}
                     </td>
                     <td className="py-2.5 px-3 font-mono text-slate-400">{tx.customer_id}</td>
-                    <td className="py-2.5 px-3 font-semibold text-white">{Number(tx.amount).toFixed(2)} €</td>
+                    <td className="py-2.5 px-3 font-semibold text-white">{Number(tx.amount).toFixed(2)} DH</td>
                     <td className="py-2.5 px-3 text-slate-300">{tx.city}, {tx.country}</td>
                     <td className="py-2.5 px-3">
                       <span className="font-mono text-rose-400 font-semibold">
