@@ -201,7 +201,7 @@ def generate_transaction(customer, is_fraud):
         "is_2fa_verified": int(
             np.random.choice([False, True], p=[0.60, 0.40])
             if is_fraud
-            else np.random.choice([False, True], p=[0.08, 0.92])
+            else np.random.choice([False, True], p=[0.10, 0.90])
         ),
     }
     return transaction
