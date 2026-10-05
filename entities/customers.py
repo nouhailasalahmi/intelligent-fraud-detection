@@ -1,10 +1,8 @@
 import random
-from datetime import datetime, timedelta
 import numpy as np
 from faker import Faker
 
 from config import *
-
 from entities.transactions import generate_transaction
 
 faker = Faker()
@@ -12,28 +10,25 @@ faker = Faker()
 
 def generate_customers(n_customers):
 
+    # Réinitialise le cache d'unicité
+    faker.unique.clear()
+
     customers = {}
 
     for customer_id in range(1, n_customers + 1):
 
-        # -------------------------
         # Montants bruts pour établir avg_amount
-        # -------------------------
         amount_samples = np.random.lognormal(
             mean=np.log(TARGET_MEDIAN_AMOUNT),
             sigma=AMOUNT_SIGMA,
             size=n_history
         )
-        avg_amount = float(np.mean(amount_samples))
 
-        # -------------------------
-        # Profil du client avec carte bancaire persistante
-        # -------------------------
-        card_id = faker.credit_card_number()
+        # Profil du client avec carte unique et persistante
         customer = {
             'customer_id': customer_id,
-            'card_id': card_id,
-            'avg_amount': avg_amount,
+            'card_id': faker.unique.credit_card_number(),
+            'avg_amount': float(np.mean(amount_samples)),
             'usual_country': "Maroc",
             'usual_city': random.choice(Morrocan_Cities),
             'usual_device': random.choice(Devices),
@@ -43,24 +38,12 @@ def generate_customers(n_customers):
             'history': []
         }
 
-        # -------------------------
-        # Historique complet ordonné chronologiquement (sans collision d'horodatage)
-        # Étalé sur les 60 derniers jours
-        # -------------------------
-        now = datetime.now()
-        # Générer n_history offsets de secondes distincts et triés en ordre décroissant
-        time_offsets = sorted(
-            random.sample(range(60, 60 * 86400), min(n_history, 60 * 86400 - 60)),
-            reverse=True
+        # Historique trié du plus récent au plus ancien
+        customer['history'] = sorted(
+            (generate_transaction(customer, is_fraud=False) for _ in range(n_history)),
+            key=lambda t: t['timestamp'],
+            reverse=True,
         )
-        customer['history'] = [
-            generate_transaction(
-                customer,
-                is_fraud=False,
-                timestamp=(now - timedelta(seconds=sec_offset)).replace(microsecond=0).isoformat()
-            )
-            for sec_offset in time_offsets
-        ]
 
         customers[customer_id] = customer
 

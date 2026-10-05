@@ -24,6 +24,14 @@ is_fraud_ratio = float(os.getenv("IS_FRAUD_RATIO", 0.05))
 Devices = ["POS Terminal", "Mobile", "Laptop"]
 Payment_Methods = ["credit_card", "debit_card", "paypal", "bank_transfer"]
 
+# Compatibilité device -> moyens de paiement réalistes
+# (PayPal et virement ne passent pas sur un terminal physique)
+Device_Payment_Compatibility = {
+    "POS Terminal": ["credit_card", "debit_card"],
+    "Mobile": ["credit_card", "debit_card", "paypal", "bank_transfer"],
+    "Laptop": ["credit_card", "debit_card", "paypal", "bank_transfer"],
+}
+
 Morrocan_Cities = [
     "Casablanca", "Rabat", "Marrakech", "Fès", "Tanger",
     "Agadir", "Meknès", "Oujda", "Kénitra", "Tétouan",
@@ -42,6 +50,34 @@ Foreign_Countries = [
     "Tunisie", "Algérie", "Égypte", "Sénégal", "Côte d'Ivoire",
     "Chine", "Russie"
 ]
+
+# Villes par pays : garantit la cohérence pays <-> ville
+# ⚠️ La clé du pays d'origine doit être EXACTEMENT la valeur de customer["usual_country"]
+Cities_By_Country = {
+    "Maroc": Morrocan_Cities,
+    "France": ["Paris", "Lyon", "Marseille", "Lille"],
+    "Espagne": ["Madrid", "Barcelone", "Valence"],
+    "Belgique": ["Bruxelles", "Anvers", "Liège"],
+    "Italie": ["Rome", "Milan", "Naples"],
+    "Allemagne": ["Berlin", "Munich", "Francfort"],
+    "Pays-Bas": ["Amsterdam", "Rotterdam", "La Haye"],
+    "Suisse": ["Genève", "Zurich", "Lausanne"],
+    "Royaume-Uni": ["Londres", "Manchester", "Birmingham"],
+    "Portugal": ["Lisbonne", "Porto", "Faro"],
+    "Émirats Arabes Unis": ["Dubaï", "Abu Dhabi", "Sharjah"],
+    "Arabie Saoudite": ["Riyad", "Djeddah", "La Mecque"],
+    "Qatar": ["Doha", "Al Rayyan", "Al Wakrah"],
+    "Turquie": ["Istanbul", "Ankara", "Izmir"],
+    "États-Unis": ["New York", "Los Angeles", "Chicago", "Miami"],
+    "Canada": ["Montréal", "Toronto", "Vancouver"],
+    "Tunisie": ["Tunis", "Sfax", "Sousse"],
+    "Algérie": ["Alger", "Oran", "Constantine"],
+    "Égypte": ["Le Caire", "Alexandrie", "Louxor"],
+    "Sénégal": ["Dakar", "Thiès", "Saint-Louis"],
+    "Côte d'Ivoire": ["Abidjan", "Yamoussoukro", "Bouaké"],
+    "Chine": ["Shanghai", "Pékin", "Shenzhen"],
+    "Russie": ["Moscou", "Saint-Pétersbourg", "Kazan"],
+}
 
 
 # ============================================

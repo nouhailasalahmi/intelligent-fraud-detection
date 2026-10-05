@@ -22,7 +22,7 @@ def preprocess_transaction(transaction_dict):
     df["month"] = df["timestamp"].dt.month
     df["day"] = df["timestamp"].dt.day
     df["hour"] = df["timestamp"].dt.hour
-    # ajoute ici toute autre feature temporelle utilisée à l'entraînement (day_of_week, etc.)
+    
     df.drop("timestamp", axis=1, inplace=True)
 
     # Encodage des variables catégorielles

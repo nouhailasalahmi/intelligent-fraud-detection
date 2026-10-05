@@ -1,22 +1,22 @@
-# environement virtuel
+# ── Environnement & secrets ──
 .venv/
+.env
 
-# cache python
+# ── Cache Python ──
 __pycache__/
 
-# Données kafka
-kafka-data/
-
-# Données locales
+# ── Données ──
 data/
+kafka-data/
+dataset/
 
-# Dataset
-dataset/*.png  
-
-
-.env
+# ── Sorties générées ──
 reports/
-tests/
-.env
 
-.env
+# ── Tests ──
+tests/
+
+# ── Modèles entraînés ──
+ML/models/*.pkl
+
+config.py

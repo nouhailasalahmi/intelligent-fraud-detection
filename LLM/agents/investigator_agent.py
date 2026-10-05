@@ -17,6 +17,14 @@ class InvestigatorAgent:
     """
 
     MAX_TOOL_STEPS = 3
+    MAX_LIMIT = 50
+
+    # Liste blanche des paramètres que le LLM a le droit de fournir, par outil.
+    # Le customer_id n'y figure jamais : il est toujours imposé par le code.
+    ALLOWED_PARAMS = {
+        "get_more_transactions": {"limit"},
+        "get_customer_risk_summary": set(),
+    }
 
     def __init__(self, tools: Optional[Dict[str, Any]] = None, llm_provider=None):
         self.llm = llm_provider or get_llm_provider()
@@ -36,7 +44,7 @@ class InvestigatorAgent:
         Exécute l'investigation factuelle et retourne une synthèse structurée en JSON.
         """
         customer_id = transaction_dict.get("customer_id")
-        
+
         # Pré-agrégation rapide pour enrichir le prompt
         relevant_keys = {"customer_id", "amount", "city", "country", "payment_method", "device_type", "timestamp", "transaction_timestamp"}
         clean_history = [
@@ -58,13 +66,14 @@ class InvestigatorAgent:
                 history[0]["content"],
                 "\n\n".join(m["content"] for m in history[1:]),
             )
-            parsed = self._parse_response(raw_response)
+            parsed = self._parse_response(raw_response)  # transforme la réponse du LLM en dictionnaire Python
 
             # Si l'agent demande d'appeler un outil
             if parsed.get("action") == "tool_call":
                 tool_name = parsed.get("tool")
                 params = parsed.get("params", {})
-                tool_result = self._call_tool(tool_name, params)
+                # customer_id fourni par le code, jamais par le LLM
+                tool_result = self._call_tool(tool_name, params, customer_id)
                 history.append({
                     "role": "user",
                     "content": f"Résultat de l'outil '{tool_name}' : {json.dumps(tool_result, default=str)}",
@@ -89,13 +98,26 @@ class InvestigatorAgent:
         # Fallback heuristique si le LLM n'a pas produit de JSON valide
         return self._heuristic_fallback(clean_tx, clean_history, ml_result, steps_used)
 
-    def _call_tool(self, tool_name: str, params: dict):
+    def _call_tool(self, tool_name: str, params: dict, customer_id: Any):
+        """
+        Exécute un outil de manière sécurisée :
+        - le customer_id est imposé par le code (le LLM choisit QUOI regarder, jamais SUR QUI) ;
+        - seuls les paramètres de la liste blanche de l'outil sont acceptés ;
+        - le paramètre limit est borné.
+        """
         if tool_name not in self.tools:
             return {"erreur": f"Outil inconnu : {tool_name}"}
+
+        params = params if isinstance(params, dict) else {}
+        safe_params = {"customer_id": customer_id}  # imposé par le code
+
+        allowed = self.ALLOWED_PARAMS.get(tool_name, set())
         try:
-            return self.tools[tool_name](**params)
+            if "limit" in allowed and "limit" in params:
+                safe_params["limit"] = max(1, min(int(params["limit"]), self.MAX_LIMIT))  # borné entre 1 et 50
+            return self.tools[tool_name](**safe_params)
         except Exception as e:
-            return {"erreur": f"Échec de l'outil {tool_name} : {str(e)}"}
+            return {"erreur": f"Échec de l'outil {tool_name} : {e}"}
 
     def _build_system_prompt(self) -> str:
         tools_desc = "\n".join(f"- `{name}`" for name in self.tools.keys())
@@ -105,9 +127,11 @@ class InvestigatorAgent:
             "les détails avec l'historique du client. Tu ne dois JAMAIS prendre de décision finale "
             "(c'est le rôle de l'Agent Décideur).\n\n"
             f"Outils disponibles pour obtenir plus d'informations :\n{tools_desc}\n\n"
+            "Les outils portent automatiquement sur le client de la transaction analysée : "
+            "ne fournis JAMAIS d'identifiant client.\n\n"
             "Réponds STRICTEMENT avec un objet JSON valide sans aucun markdown ni texte additionnel.\n\n"
-            "Format pour appeler un outil :\n"
-            '{"action": "tool_call", "tool": "nom_outil", "params": {"customer_id": 123}}\n\n'
+            "Format pour appeler un outil (params optionnel, 'limit' accepté uniquement par get_more_transactions) :\n"
+            '{"action": "tool_call", "tool": "nom_outil", "params": {}}\n\n'
             "Format pour rendre ton rapport d'investigation factuel :\n"
             "{\n"
             '  "action": "investigation_report",\n'

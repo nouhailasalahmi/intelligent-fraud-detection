@@ -6,6 +6,7 @@ sur la synthèse factuelle fournie par l'Investigateur, les indicateurs ML et le
 """
 
 import json
+import re
 from typing import Dict, Any, Optional
 from LLM.providers import get_llm_provider
 
@@ -14,7 +15,16 @@ class DecisionAgent:
     """
     Rôle : Juge / Arbitre de Fraude et Conformité.
     Consomme les preuves de l'enquête et émet un verdict motivé avec score de confiance.
+    Principe : le LLM propose, le code valide.
     """
+
+    VALID_DECISIONS = ("fraude", "legitime", "incertain")
+    VALID_RISK_LEVELS = {"CRITICAL", "HIGH", "MEDIUM", "LOW"}
+    VALID_ACTIONS = {"BLOCK_CARD", "NOTIFY_CUSTOMER", "FLAG_FOR_REVIEW", "ALLOW"}
+
+    # Valeurs par défaut déduites de la décision (jamais du LLM)
+    DEFAULT_RISK = {"fraude": "HIGH", "incertain": "MEDIUM", "legitime": "LOW"}
+    DEFAULT_ACTION = {"fraude": "BLOCK_CARD", "incertain": "FLAG_FOR_REVIEW", "legitime": "ALLOW"}
 
     def __init__(self, llm_provider=None):
         self.llm = llm_provider or get_llm_provider()
@@ -34,24 +44,39 @@ class DecisionAgent:
 
         raw_response = self.llm.generate(system_prompt, user_prompt)
         parsed = self._parse_response(raw_response)
-        
-        # Validation et normalisation de la décision
-        decision = str(parsed.get("decision", "")).strip().lower()
-        if decision not in ("fraude", "legitime", "incertain"):
-            # Normalisation des variantes anglaises éventuelles
-            if "fraud" in decision:
-                decision = "fraude"
-            elif "legit" in decision:
-                decision = "legitime"
-            else:
-                decision = "incertain"
 
-        confidence = float(parsed.get("confidence", 0.5))
-        confidence = max(0.0, min(1.0, confidence))
+        # --- Décision ---
+        decision = self._normalize_decision(parsed.get("decision"))
 
-        justification = parsed.get("justification") or parsed.get("raison") or "Décision établie à partir de la synthèse de l'enquête."
-        risk_level = parsed.get("risk_level", "HIGH" if decision == "fraude" else "LOW")
-        recommended_action = parsed.get("recommended_action", "BLOCK_CARD" if decision == "fraude" else "ALLOW")
+        # --- Confiance : 0.0 par défaut pour forcer la 2e passe si la réponse est inexploitable ---
+        confidence = self._normalize_confidence(parsed.get("confidence"))
+
+        # --- Niveau de risque : validé contre la liste fermée ---
+        risk_level = str(parsed.get("risk_level", "")).strip().upper()
+        if risk_level not in self.VALID_RISK_LEVELS:
+            risk_level = self.DEFAULT_RISK[decision]
+
+        # --- Action recommandée : validée contre la liste fermée ---
+        recommended_action = str(parsed.get("recommended_action", "")).strip().upper()
+        if recommended_action not in self.VALID_ACTIONS:
+            recommended_action = self.DEFAULT_ACTION[decision]
+
+        # --- Justification ---
+        justification = (
+            parsed.get("justification")
+            or parsed.get("raison")
+            or "Décision établie à partir de la synthèse de l'enquête."
+        )
+
+        # --- Contrôle de cohérence decision / risk_level ---
+        if self._is_inconsistent(decision, risk_level):
+            justification = (
+                f"[Incohérence détectée : decision={decision}, risk_level={risk_level}. "
+                f"Dossier requalifié en 'incertain'.] {justification}"
+            )
+            decision = "incertain"
+            risk_level = self.DEFAULT_RISK["incertain"]
+            recommended_action = self.DEFAULT_ACTION["incertain"]
 
         return {
             "decision": decision,
@@ -61,6 +86,59 @@ class DecisionAgent:
             "recommended_action": recommended_action,
             "raw_response": raw_response
         }
+
+    # ------------------------------------------------------------------
+    # Validation / normalisation
+    # ------------------------------------------------------------------
+
+    def _normalize_decision(self, value: Any) -> str:
+        """Ramène la décision du LLM à l'une des trois valeurs autorisées. Défaut : incertain."""
+        decision = str(value or "").strip().lower()
+
+        if decision in self.VALID_DECISIONS:
+            return decision
+
+        # Incertitude d'abord (évite qu'un texte ambigu soit pris pour une fraude)
+        if any(k in decision for k in ("incert", "uncertain", "unsure", "unclear")):
+            return "incertain"
+
+        # Négations (« non fraude », « not fraud ») : à traiter avant la détection de « fraud »
+        if "legit" in decision or re.match(r"^(non|pas|not|no)\b", decision):
+            return "legitime"
+
+        if "fraud" in decision:
+            return "fraude"
+
+        return "incertain"
+
+    @staticmethod
+    def _normalize_confidence(value: Any) -> float:
+        """Convertit la confiance en float borné [0, 1]. Défaut : 0.0 (force la 2e passe)."""
+        try:
+            if isinstance(value, str):
+                value = value.strip().rstrip("%")
+                number = float(value)
+                # « 85 » ou « 85% » -> 0.85
+                if number > 1.0:
+                    number = number / 100.0
+            else:
+                number = float(value)
+        except (TypeError, ValueError):
+            return 0.0
+        return max(0.0, min(1.0, number))
+
+    @staticmethod
+    def _is_inconsistent(decision: str, risk_level: str) -> bool:
+        """Détecte les verdicts contradictoires entre decision et risk_level."""
+        if decision == "legitime" and risk_level in {"CRITICAL", "HIGH"}:
+            return True
+        if decision == "fraude" and risk_level == "LOW":
+            return True
+        return False
+
+    # ------------------------------------------------------------------
+    # Prompts
+    # ------------------------------------------------------------------
 
     def _build_system_prompt(self) -> str:
         return (
@@ -106,11 +184,30 @@ class DecisionAgent:
             "Sur la base de ces faits, rends ton verdict final et ta justification."
         )
 
+    # ------------------------------------------------------------------
+    # Parsing
+    # ------------------------------------------------------------------
+
     def _parse_response(self, raw: str) -> dict:
+        """
+        Extrait l'objet JSON de la réponse du LLM.
+        Gère les blocs ```json ... ``` et le texte parasite autour de l'objet.
+        Retourne {} si rien d'exploitable.
+        """
         try:
-            cleaned = raw.strip()
-            if cleaned.startswith("```"):
-                cleaned = cleaned.strip("`").replace("json", "", 1).strip()
-            return json.loads(cleaned)
+            cleaned = (raw or "").strip()
+
+            # Bloc markdown ```json ... ```
+            fence = re.search(r"```(?:json)?\s*(.*?)\s*```", cleaned, re.DOTALL | re.IGNORECASE)
+            if fence:
+                cleaned = fence.group(1).strip()
+
+            # Texte parasite : on isole du premier « { » au dernier « } »
+            start, end = cleaned.find("{"), cleaned.rfind("}")
+            if start != -1 and end > start:
+                cleaned = cleaned[start:end + 1]
+
+            result = json.loads(cleaned)
+            return result if isinstance(result, dict) else {}
         except Exception:
             return {}

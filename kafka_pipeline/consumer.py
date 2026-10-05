@@ -22,7 +22,9 @@ from db import (
     get_customer_history,
     update_llm_decision,
     create_tables,
-    log_audit_event
+    log_audit_event,
+    upsert_customer,  # NOUVEAU : garantit l'existence du client (clé étrangère)
+    register_card,    # NOUVEAU : enregistre la carte comme ACTIVE si elle est inconnue
 )
 from LLM.agents import MultiAgentOrchestrator
 from compliance.dsp2 import verify_dsp2_compliance
@@ -94,7 +96,23 @@ try:
             # Étape 2 : Vérification de conformité réglementaire DSP2 (SCA / 2FA)
             dsp2_info = verify_dsp2_compliance(transaction, resultat_ml)
 
-            # Étape 3 : Persistance transaction en base de données
+            # Étape 3 : Persistance en base de données
+            customer_id = transaction.get("customer_id")
+
+            # 3a. NOUVEAU : le client doit exister AVANT l'insertion de la transaction (clé étrangère)
+            upsert_customer(
+                customer_id,
+                usual_device=transaction.get("usual_device"),
+                usual_city=transaction.get("usual_city"),
+                usual_country=transaction.get("usual_country"),
+                usual_payment_method=transaction.get("usual_payment_method"),
+            )
+
+            # 3b. NOUVEAU : enregistrement de la carte dans le registre (sans écraser un statut existant,
+            #     donc une carte déjà BLOCKED le reste)
+            register_card(transaction.get("card_id"), customer_id)
+
+            # 3c. Transaction
             transaction_id = save_transaction(transaction, resultat_ml, dsp2_info)
 
             # Audit de l'ingestion et scoring ML
@@ -112,7 +130,6 @@ try:
             )
 
             # Étape 4 : Récupération de l'historique client
-            customer_id = transaction.get("customer_id")
             historique = get_customer_history(customer_id)
 
             status_prefix = "ALERTE ML" if resultat_ml["is_fraud_alert"] else "TRANSACTION NORMALE"
