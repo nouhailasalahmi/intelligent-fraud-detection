@@ -20,6 +20,7 @@
 - [Stack technique](#-stack-technique)
 - [Démarrage rapide](#-démarrage-rapide)
 - [Configuration](#-configuration)
+- [Génération des données synthétiques](#-génération-des-données-synthétiques)
 - [Structure du projet](#-structure-du-projet)
 - [Conformité et sécurité](#-conformité-et-sécurité)
 
@@ -141,7 +142,7 @@ Les actions sont publiées sur le topic Kafka dédié `fraud-actions`, puis exé
 ### Prérequis
 
 - Docker et Docker Compose
-- Python 3.10+ (pour un lancement hors Docker)
+- Python 3.10+ (pour générer les données et entraîner les modèles, ou pour un lancement hors Docker)
 - Node.js 18+ (pour lancer le frontend hors Docker)
 - Une clé API pour le fournisseur LLM choisi, ou un modèle local via Ollama
 
@@ -154,18 +155,30 @@ cd intelligent-fraud-detection
 
 ### 2. Configurer l'environnement
 
+Créez un fichier `.env` à la racine du projet, à côté de `config.py`, avec vos valeurs (un exemple de contenu est donné dans la section Configuration ci-dessous). Ce fichier n'est jamais versionné. Pour un premier essai en local, il peut rester minimal : `config.py` fournit des valeurs par défaut pour la plupart des paramètres.
+
+### 3. Générer le dataset et entraîner les modèles
+
+Le dataset (`dataset/`) et les modèles entraînés (`ML/models/`) ne sont **pas versionnés** : il faut les générer localement avant le premier lancement.
+
 ```bash
-cp .env.example .env
-# puis renseigner vos valeurs dans .env (voir section Configuration)
+python -m venv .venv
+source .venv/bin/activate        # Windows : .venv\Scripts\activate
+pip install -r requirements.txt
+
+python scripts/dataset_generator.py   # génère dataset/transactions.csv
+python ML/fraud_detector.py           # entraîne et sauvegarde ML/models/*.pkl
 ```
 
-### 3. Lancer toute la plateforme
+> ⚠️ Les 5 fichiers de `ML/models/` (`xgboost_model.pkl`, `isolation_forest.pkl`, `label_encoders.pkl`, `feature_columns.pkl`, `threshold.pkl`) forment un ensemble cohérent. Après toute régénération du dataset, réentraînez et remplacez-les **tous** ensemble.
+
+### 4. Lancer toute la plateforme
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
-### 4. Vérifier que tout tourne
+### 5. Vérifier que tout tourne
 
 | Service | Rôle | Accès |
 |---|---|---|
@@ -181,16 +194,14 @@ docker-compose up --build
 Suivre le flux en direct :
 
 ```bash
-docker-compose logs -f consumer action_consumer api
+docker compose logs -f consumer action_consumer api
 ```
 
 ### Installation locale (sans Docker)
 
 ```bash
-# Backend / pipeline
-python -m venv .venv
+# Backend / pipeline (après les étapes 1 à 3)
 source .venv/bin/activate        # Windows : .venv\Scripts\activate
-pip install -r requirements.txt
 
 # Frontend
 cd frontend
@@ -202,25 +213,48 @@ npm run dev
 
 ## ⚙️ Configuration
 
-Les paramètres sont centralisés dans `config.py` / `api/config.py` (seuils de décision, connexion base, Kafka, CORS) et les secrets dans un fichier `.env` **jamais versionné**.
+Les paramètres sont centralisés dans `config.py` / `api/config.py` (seuils de décision, connexion base, Kafka, CORS) et lus depuis les variables d'environnement. Les secrets se placent dans un fichier `.env` que vous créez vous-même à la racine du projet, **jamais versionné**.
 
-Exemple de `.env.example` (adapter les noms aux variables réellement lues par `config.py`) :
+Exemple de contenu pour votre `.env` (les noms correspondent aux variables lues par `config.py`) :
 
 ```env
 # Fournisseur LLM : ollama | mistral | openai | anthropic
 LLM_PROVIDER=ollama
-LLM_API_KEY=your_key_here
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3:latest
+# LLM_API_KEY=your_key_here        # uniquement pour un fournisseur cloud
 
 # Base de données
-POSTGRES_USER=your_user
-POSTGRES_PASSWORD=your_password
-POSTGRES_DB=fraud_db
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=transactions_db
+DB_USER=your_user
+DB_PASSWORD=your_password
+# Si docker-compose.yml utilise POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB
+# pour le conteneur PostgreSQL, gardez exactement les mêmes valeurs.
+
+# Seuils de décision (optionnel)
+CONFIDENCE_BLOCK_THRESHOLD=0.85
+CONFIDENCE_REVIEW_THRESHOLD=0.60
 
 # API
 JWT_SECRET_KEY=your_own_secret_key
 ```
 
-> ⚠️ Ne commitez jamais `.env` ni vos clés API. Vérifiez qu'il figure dans `.gitignore`. La valeur par défaut de `JWT_SECRET_KEY` dans `docker-compose.yml` est un exemple de démonstration : à remplacer avant tout déploiement réel.
+> ⚠️ Ne commitez jamais `.env` ni vos clés API. Vérifiez qu'il figure dans `.gitignore`. Ne mettez jamais de vrai mot de passe ou de vraie clé comme valeur par défaut dans le code : elle resterait dans l'historique Git. La valeur par défaut de `JWT_SECRET_KEY` dans `docker-compose.yml` est un exemple de démonstration : à remplacer avant tout déploiement réel.
+
+---
+
+## 🧪 Génération des données synthétiques
+
+Le générateur de transactions (`scripts/dataset_generator.py` et `entities/transactions.py`) produit des données synthétiques avec des règles de cohérence :
+
+- **Cohérence géographique** : si le pays change, la ville est tirée parmi les villes de ce pays (`Cities_By_Country` dans `config.py`). Un changement de pays implique donc toujours un changement de ville.
+- **Cohérence device / paiement** : un terminal POS n'accepte que la carte de crédit ou de débit ; PayPal et virement ne sont possibles que sur Mobile et Laptop (`Device_Payment_Compatibility`).
+- **Flags cohérents** : les indicateurs `device_changed`, `payment_method_changed`, `city_changed` et `country_changed` sont recalculés à partir des valeurs finales de la transaction, donc ils ne peuvent pas contredire les colonnes.
+- **Plages horaires** : les profils clients dont la plage active passe minuit sont gérés.
+
+> ⚠️ **Fuite de données (data leakage)** : sur ce dataset simulé, les indicateurs `out_hours`, `amount_abnormal`, `*_changed` et `is_2fa_verified` sont tirés à partir du label `is_fraud`. Ils reflètent donc la règle de génération et non un comportement réel. Ils sont exclus de l'entraînement (`excluded_columns` dans le notebook / `fraud_detector.py`) pour éviter des scores artificiellement parfaits. Évaluez le modèle avec des métriques adaptées au déséquilibre (PR-AUC, rappel à précision fixée) plutôt qu'avec l'accuracy.
 
 ---
 
@@ -230,7 +264,7 @@ JWT_SECRET_KEY=your_own_secret_key
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
-├── config.py                     # Configuration centralisée et seuils
+├── config.py                     # Configuration centralisée, seuils, référentiels pays/villes/devices
 ├── db.py                         # PostgreSQL (transactions, audit_trail, action_log)
 │
 ├── compliance/                   # Conformité bancaire et réglementaire
@@ -251,38 +285,39 @@ JWT_SECRET_KEY=your_own_secret_key
 │
 ├── ML/                           # Modèles de détection
 │   ├── fraud_detector.py         # Pipeline XGBoost + Isolation Forest
-│   └── models/                   # Artefacts des modèles entraînés
+│   ├── notebook.ipynb            # Exploration des données et expérimentation
+│   └── models/                   # Artefacts des modèles (générés localement, non versionnés)
 │
 ├── kafka_pipeline/               # Streaming temps réel
 │   ├── producer.py               # Générateur de transactions
 │   ├── consumer.py               # Ingestion, ML, DSP2, multi-agents
 │   └── action_consumer.py        # Exécution des actions et SAR
 │
-├── api/                           # API FastAPI
-│   ├── main.py                    # Point d'entrée, lifespan, écoute Kafka
-│   ├── config.py                  # Configuration API (préfixe, CORS)
-│   ├── database.py                # Accès base de données côté API
-│   ├── auth/                      # Authentification JWT
-│   ├── services/                  # Écoute Kafka, logique métier
-│   └── routers/                   # Endpoints : auth, transactions, alerts, reports, dashboard, agent, ws
+├── api/                          # API FastAPI
+│   ├── main.py                   # Point d'entrée, lifespan, écoute Kafka
+│   ├── config.py                 # Configuration API (préfixe, CORS)
+│   ├── database.py               # Accès base de données côté API
+│   ├── auth/                     # Authentification JWT
+│   ├── services/                 # Écoute Kafka, logique métier
+│   └── routers/                  # Endpoints : auth, transactions, alerts, reports, dashboard, agent, ws
 │
-├── frontend/                      # Dashboard web
-│   ├── src/                       # Composants React / TypeScript
-│   └── package.json               # Dépendances (React, Vite, Tailwind, Recharts)
+├── frontend/                     # Dashboard web
+│   ├── src/                      # Composants React / TypeScript
+│   └── package.json              # Dépendances (React, Vite, Tailwind, Recharts)
 │
-├── entities/                      # Modèles de données
+├── entities/                     # Modèles de données
 │   ├── customers.py
 │   └── transactions.py
 │
-├── dataset/                       # Données d'exemple et visualisations
+├── dataset/                      # Dataset et visualisations (générés localement, non versionnés)
 │   └── transactions.csv
 │
-└── scripts/                       # Scripts utilitaires (génération de données, démo)
+└── scripts/                      # Scripts utilitaires (génération de données, démo)
     ├── dataset_generator.py
     └── demo.py
 ```
 
-> Les dossiers `tests/` et `reports/` (rapports SAR générés à l'exécution) ne sont pas versionnés.
+> Les dossiers `tests/`, `reports/` (rapports SAR générés à l'exécution), `dataset/` et `ML/models/` ne sont pas versionnés.
 
 ---
 
@@ -293,3 +328,4 @@ JWT_SECRET_KEY=your_own_secret_key
 - Agent décideur isolé de la base de données (principe du moindre privilège).
 - Authentification JWT sur l'API, CORS restreint aux origines autorisées.
 - Piste d'audit complète pour chaque décision automatisée, exploitable lors d'un contrôle.
+- Les modèles `.pkl` (format `pickle`) ne doivent être chargés que s'ils proviennent d'une source de confiance : leur ouverture peut exécuter du code.
