@@ -155,10 +155,7 @@ cd intelligent-fraud-detection
 
 ### 2. Configurer l'environnement
 
-```bash
-cp .env.example .env
-# puis renseigner vos valeurs dans .env (voir section Configuration)
-```
+Créez un fichier `.env` à la racine du projet, à côté de `config.py`, avec vos valeurs (un exemple de contenu est donné dans la section Configuration ci-dessous). Ce fichier n'est jamais versionné. Pour un premier essai en local, il peut rester minimal : `config.py` fournit des valeurs par défaut pour la plupart des paramètres.
 
 ### 3. Générer le dataset et entraîner les modèles
 
@@ -216,9 +213,9 @@ npm run dev
 
 ## ⚙️ Configuration
 
-Les paramètres sont centralisés dans `config.py` / `api/config.py` (seuils de décision, connexion base, Kafka, CORS) et lus depuis les variables d'environnement. Les secrets se placent dans un fichier `.env` **jamais versionné** ; seul `.env.example` (sans valeurs sensibles) est versionné.
+Les paramètres sont centralisés dans `config.py` / `api/config.py` (seuils de décision, connexion base, Kafka, CORS) et lus depuis les variables d'environnement. Les secrets se placent dans un fichier `.env` que vous créez vous-même à la racine du projet, **jamais versionné**.
 
-Exemple de `.env.example` (les noms correspondent aux variables lues par `config.py`) :
+Exemple de contenu pour votre `.env` (les noms correspondent aux variables lues par `config.py`) :
 
 ```env
 # Fournisseur LLM : ollama | mistral | openai | anthropic
@@ -267,7 +264,6 @@ Le générateur de transactions (`scripts/dataset_generator.py` et `entities/tra
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
-├── .env.example                  # Modèle de variables d'environnement (sans secrets)
 ├── config.py                     # Configuration centralisée, seuils, référentiels pays/villes/devices
 ├── db.py                         # PostgreSQL (transactions, audit_trail, action_log)
 │
